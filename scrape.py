@@ -62,9 +62,6 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
 
     for i,block_num in enumerate(block_num_gen):
 
-        if i > 10:
-            break
-
         block = web3.eth.getBlock(block_num)
 
         date = datetime.utcfromtimestamp(block['timestamp'])
