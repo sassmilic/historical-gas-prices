@@ -4,10 +4,11 @@ import warnings
 from web3 import Web3
 
 from config import (
+    INFURA_API_KEY,
     INFURA_PROVIDER,
 )
 
-if not INFURA_PROVIDER:
+if not INFURA_API_KEY:
     warnings.warn("Infura Provider is missing. Go here to sign up for an account: https://infura.io/")
 
 class LockedIterator(object):
@@ -36,11 +37,11 @@ def get_first_eth_block_at(ts):
 
     current_time = time.time()
     latest_block = web3.eth.getBlock('latest')
-   
+
     # block time for ethereum is ~15 seconds
     block_time = 15
     seconds_in_day = 86400
-   
+
     ##
     ## First, narrow down search to within 24 hours
     ## This is done with heuristics derived from avg block time
@@ -56,18 +57,18 @@ def get_first_eth_block_at(ts):
         blocks_ago = int(blocks_ago)
         first_block_num = first_block['number'] - blocks_ago
         first_block = web3.eth.getBlock(first_block_num)
-      
+
     ##
     ## Next, do binary search to get exact block number
     ##
 
     # get block approx 24 hours ahead of `first_block`
-    # using 36 instead of 24 to have a buffer than ensures `block24` timestamp >= `ts` 
+    # using 36 instead of 24 to have a buffer than ensures `block24` timestamp >= `ts`
     hours_ahead = 36
     block_num = first_block['number'] + hours_ahead * seconds_in_day // block_time
     # sometimes latest block will return an error when using its number in `getBlock`
     # probably due to general asynchrony in the network, hence buffer
-    buffer_ = 10 
+    buffer_ = 10
     block_num = min(web3.eth.getBlock('latest')['number'] - buffer_, block_num)
     block24 = web3.eth.getBlock(block_num)
     assert block24['timestamp'] > ts
@@ -80,7 +81,7 @@ def __binary_search(web3, ts, block1, block2):
     while block1['number'] < block2['number']:
 
         mid = web3.eth.getBlock((block1['number'] + block2['number']) // 2 + 1)
-        
+
         if mid['timestamp'] == ts:
             # very unlikely
             return mid

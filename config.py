@@ -1,11 +1,11 @@
 import json
 import multiprocessing
+import os
 
-INFURA_URL = "https://mainnet.infura.io/v3/87dde21eb7704f8c82f3b51aa58653d0" #delet
-INFURA_PROVIDER = "wss://mainnet.infura.io/ws/v3/87dde21eb7704f8c82f3b51aa58653d0" #delet
+INFURA_API_KEY = os.getenv('INFURA_API_KEY')
+INFURA_PROVIDER = f"wss://mainnet.infura.io/ws/v3/{INFURA_API_KEY}"
 
 # configs for scraping transaction prices
-PERCENTILE_GRANULARITY = 20
 SAMPLE_PERCENT = 1
 NTHREADS = multiprocessing.cpu_count()
 TIMEZONE = 'utc'
