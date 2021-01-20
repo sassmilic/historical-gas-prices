@@ -37,12 +37,10 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
 
     web3 = connect()
 
-    ts = to_unixtime(dt_from)
-    block1 = get_first_eth_block_at(ts)
+    block1 = get_first_eth_block_at(to_unixtime(dt_from))
 
     if dt_to:
-        ts2 = to_unixtime(dt_to)
-        block2 = get_first_eth_block_at(ts2)
+        block2 = get_first_eth_block_at(to_unixtime(dt_to))
     else:
         dt_to = datetime.now() # for logging purposes
         block2 = web3.eth.getBlock('latest')
@@ -59,11 +57,10 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
     # initialize progress bar
     global PBAR
     # approximate total number of txns to process
-    blocks_per_minute = 3.4
-    txns_per_block = 70
-    minutes = (dt_from - dt_to).seconds / 60
-    approx_total_txns = minutes * blocks_per_minute * txns_per_block * SAMPLE_PERCENT / 100
-    PBAR = tqdm(total=approx_total_txns)
+    txns_per_sec = 15 # optimistic; i.e. upper bound
+    secs = (dt_to - dt_from).seconds
+    approx_total_txns = secs * txns_per_sec * SAMPLE_PERCENT / 100
+    PBAR = tqdm(total=int(approx_total_txns))
 
     # Create consumers
     # - consoomers read from txn hash queue and query transactions for prices
@@ -100,9 +97,6 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
 def producer(block_nums, txn_queue, price_queue):
     web3 = connect()
 
-    logging.info("Populating txn queue ...")
-
-    total_txns = 0
     for block_num in block_nums:
 
         block = web3.eth.getBlock(block_num)
@@ -111,7 +105,6 @@ def producer(block_nums, txn_queue, price_queue):
         for txnhash in block['transactions']:
             # only add SAMPLE_PERCENT of transactions to txn queue
             if do_select():
-                total_txns += 1
                 txn_queue.put((block_num, txnhash))
 
     '''
@@ -120,10 +113,6 @@ def producer(block_nums, txn_queue, price_queue):
     main thread from consumer threads so the main only needs
     to keep track of (i.e. "join") the one producer thread.
     '''
-
-    logging.info("Txn queue fully populated.")
-    logging.info(f"Total transactions in queue: {total_txns}.")
-
 
     while not txn_queue.empty():
         # wait for price queue to populate
@@ -164,9 +153,11 @@ def consoomer(i, txn_queue, price_queue):
             PBAR.update(1)
 
 if __name__ == '__main__':
-    from_datestr = '2021-01-17'
-    to_datestr = dt_to_str(datetime.now())
-    outfile = f'gas_prices_{from_datestr}_{to_datestr}.csv'
+    from_datestr = '2021-01-19'
     dt_from = datetime.strptime(from_datestr, "%Y-%m-%d")
-    scrape_prices(dt_from, outfile=outfile)
+    to_datestr = dt_to_str(datetime.now())
+
+    outfile = f'gas_prices_{from_datestr}_{to_datestr}_{SAMPLE_PERCENT}%-sampling.csv'
+
+    scrape_prices(dt_from, dt_to=dt_to,  outfile=outfile)
 
