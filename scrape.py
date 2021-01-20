@@ -62,7 +62,7 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
     blocks_per_minute = 3.4
     txns_per_block = 70
     minutes = (dt_from - dt_to).seconds / 60
-    approx_total_txns = minutes * blocks_per_minute * txns_per_block * SAMPLE_PERCENT
+    approx_total_txns = minutes * blocks_per_minute * txns_per_block * SAMPLE_PERCENT / 100
     PBAR = tqdm(total=approx_total_txns)
 
     # Create consumers
@@ -164,7 +164,7 @@ def consoomer(i, txn_queue, price_queue):
             PBAR.update(1)
 
 if __name__ == '__main__':
-    from_datestr = '2021-01-12'
+    from_datestr = '2021-01-17'
     to_datestr = dt_to_str(datetime.now())
     outfile = f'gas_prices_{from_datestr}_{to_datestr}.csv'
     dt_from = datetime.strptime(from_datestr, "%Y-%m-%d")
