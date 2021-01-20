@@ -60,6 +60,9 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
     txns_per_sec = 15 # optimistic; i.e. upper bound
     secs = (dt_to - dt_from).total_seconds()
     approx_total_txns = secs * txns_per_sec * SAMPLE_PERCENT / 100
+
+    logging.info(f"Approximately {approx_total_txns} txns to process.")
+
     PBAR = tqdm(total=int(approx_total_txns))
 
     # Create consumers
@@ -159,5 +162,5 @@ if __name__ == '__main__':
 
     outfile = f'gas_prices_{from_datestr}_{to_datestr}_{SAMPLE_PERCENT}%-sampling.csv'
 
-    scrape_prices(dt_from, dt_to=dt_to,  outfile=outfile)
+    scrape_prices(dt_from=dt_from, dt_to=dt_from + timedelta(minutes=20),  outfile=outfile)
 

@@ -4,12 +4,11 @@ import warnings
 from web3 import Web3
 
 from config import (
-    INFURA_API_KEY,
-    INFURA_PROVIDER,
+    NODE_IP_ADDR
 )
 
-if not INFURA_API_KEY:
-    warnings.warn("Infura Provider is missing. Go here to sign up for an account: https://infura.io/")
+if not NODE_IP_ADDR:
+    warnings.warn("Address of Ethereum node is missing.")
 
 class LockedIterator(object):
     # from: https://stackoverflow.com/questions/1131430/are-generators-threadsafe
@@ -27,7 +26,7 @@ class LockedIterator(object):
             self.lock.release()
 
 def connect():
-    return Web3(Web3.WebsocketProvider(INFURA_PROVIDER))
+    return Web3(Web3.HTTPProvider(NODE_IP_ADDR))
 
 def get_first_eth_block_at(ts):
     '''
