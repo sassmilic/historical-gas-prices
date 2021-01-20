@@ -56,6 +56,15 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
     txn_queue = queue.Queue()
     price_queue = queue.Queue()
 
+    # initialize progress bar
+    global PBAR
+    # approximate total number of txns to process
+    blocks_per_minute = 3.4
+    txns_per_block = 70
+    minutes = (dt_from - dt_to).seconds / 60
+    approx_total_txns = minutes * blocks_per_minute * txns_per_block * SAMPLE_PERCENT
+    PBAR = tqdm(total=approx_total_txns)
+
     # Create consumers
     # - consoomers read from txn hash queue and query transactions for prices
     for i in range(NTHREADS - 1):
@@ -94,7 +103,7 @@ def producer(block_nums, txn_queue, price_queue):
     logging.info("Populating txn queue ...")
 
     total_txns = 0
-    for block_num in tqdm(list(block_nums)):
+    for block_num in block_nums:
 
         block = web3.eth.getBlock(block_num)
         date = datetime.utcfromtimestamp(block['timestamp'])
@@ -115,9 +124,6 @@ def producer(block_nums, txn_queue, price_queue):
     logging.info("Txn queue fully populated.")
     logging.info(f"Total transactions in queue: {total_txns}.")
 
-    # initialize progress bar
-    global PBAR
-    PBAR = tqdm(total=total_txns)
 
     while not txn_queue.empty():
         # wait for price queue to populate
@@ -147,9 +153,7 @@ def producer(block_nums, txn_queue, price_queue):
 
 def consoomer(i, txn_queue, price_queue):
     web3 = connect()
-    # sort of hacky: ensure PBAR has been initialized
-    # with total amount of transactions in queue
-    while True and PBAR:
+    while True:
         if not txn_queue.empty():
             block_num, txnhash = txn_queue.get()
             txn = web3.eth.getTransaction(txnhash)
