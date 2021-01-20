@@ -58,7 +58,7 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
     global PBAR
     # approximate total number of txns to process
     txns_per_sec = 15 # optimistic; i.e. upper bound
-    secs = (dt_to - dt_from).seconds
+    secs = (dt_to - dt_from).total_seconds()
     approx_total_txns = secs * txns_per_sec * SAMPLE_PERCENT / 100
     PBAR = tqdm(total=int(approx_total_txns))
 
@@ -148,9 +148,9 @@ def consoomer(i, txn_queue, price_queue):
             txn = web3.eth.getTransaction(txnhash)
             t = (block_num, txnhash, txn['gasPrice'])
             price_queue.put(t)
-
             # update progress bar
             PBAR.update(1)
+            # TODO: add a sleep() if rps becomes an issue
 
 if __name__ == '__main__':
     from_datestr = '2021-01-19'
