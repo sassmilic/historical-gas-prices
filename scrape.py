@@ -15,6 +15,11 @@ from multiprocessing import Pool
 # from hanging_threads import start_monitoring
 # monitoring_thread = start_monitoring()
 
+####
+####
+# TODO:
+# - store unixtime of block number
+
 from util import LockedIterator, connect, get_first_eth_block_at
 
 from config import (
@@ -33,19 +38,16 @@ do_select = lambda: choice([True, False], 1, p=[SAMPLE_PERCENT/100, 1 - SAMPLE_P
 # keep track of progress via progress bar
 PBAR = None
 
-def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
+def scrape_prices(dt_from, dt_to=None):
 
-    web3 = connect()
-
-    block1 = get_first_eth_block_at(to_unixtime(dt_from))
-
-    if dt_to:
-        block2 = get_first_eth_block_at(to_unixtime(dt_to))
-    else:
+    if not dt_to:
         dt_to = datetime.now() # for logging purposes
-        block2 = web3.eth.getBlock('latest')
 
-    block_nums = range(block1['number'], block2['number'] + 1)
+    outfile = f'gas_prices_{dt_to_str(dt_from)}_{dt_to_str(dt_to)}_{SAMPLE_PERCENT}%-sampling'
+    logging.info(f'Writing to files prefixed with {outfile}')
+
+    block_nums = get_block_numbers(dt_from, dt_to, SAMPLE_PERCENT)
+    logging.info(f"Querying {len(block_nums)} blocks.")
 
     ##
     ## producer - consoomer pattern
@@ -57,9 +59,8 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
     # initialize progress bar
     global PBAR
     # approximate total number of txns to process
-    txns_per_sec = 15 # optimistic; i.e. upper bound
-    secs = (dt_to - dt_from).total_seconds()
-    approx_total_txns = secs * txns_per_sec * SAMPLE_PERCENT / 100
+    txns_per_block = 170 # approximation
+    approx_total_txns = len(block_nums) * txns_per_block
 
     logging.info(f"Approximately {approx_total_txns} txns to process.")
 
@@ -75,40 +76,82 @@ def scrape_prices(dt_from, dt_to=None, outfile='gas_prices.csv'):
 
     # create producer
     # producer queries for block numbers and collects txn hashes
-    prod = threading.Thread(target=producer, args=(block_nums, txn_queue, price_queue))
+    prod = threading.Thread(target=producer, args=(block_nums, txn_queue, price_queue, outfile))
     prod.start()
     prod.join()
 
+    logging.info("Done.")
+
+def get_block_numbers(dt_from, dt_to, sample_percent, chunk_size=2):
+    '''
+    Get a sample of block numbers between dates `from_dt` to `to_dt`.
+    - Only take a systematic sample of `sample_percent` from that range.
+    - We have a constraint to ensure blocks are sampled in a contiguous
+        chunk of `chunk_size`
+    '''
+
+    block1 = get_first_eth_block_at(to_unixtime(dt_from))
+    block2 = get_first_eth_block_at(to_unixtime(dt_to))
+
+    # all block numbers in this date range
+    block_nums = list(range(block1['number'], block2['number'] + 1))
+
+    n = len(block_nums)
+    x = int(n * sample_percent / 100)
+
+    skip = n // (x // chunk_size)
+
+    first_blocks = range(block1['number'], block2['number'], skip)
+
+    all_block_nums = []
+    for b in first_blocks:
+        for i in range(chunk_size):
+            all_block_nums.append(b + i)
+
+    return all_block_nums
+
+def write_to_file(price_queue, outfile, part=None, ntxns=None):
+
     with open(outfile, 'w') as f:
-        f.write(f"# Sampling {SAMPLE_PERCENT}% of transactions\n")
-        f.write(f"# from {dt_from} to {dt_to}\n")
 
         fieldnames = ['blockNum', 'txnID', 'gasPrice']
         writer = csv.writer(f, delimiter='\t')
 
         writer.writerow(fieldnames)
 
-        while not price_queue.empty():
-            block_num, txn_id, gas_price = price_queue.get()
-            txn_id = txn_id.hex() # convert to a string
-            writer.writerow([block_num, txn_id, gas_price])
+        if not ntxns:
+            # write all txns
+            while not price_queue.empty():
+                block_num, txn_id, gas_price = price_queue.get()
+                txn_id = txn_id.hex() # convert to a string
+                writer.writerow([block_num, txn_id, gas_price])
 
-    logging.info("Done.")
+        else:
+            for _ in range(ntxns):
+                block_num, txn_id, gas_price = price_queue.get()
+                txn_id = txn_id.hex() # convert to a string
+                writer.writerow([block_num, txn_id, gas_price])
 
 
 # Function called by the producer thread
-def producer(block_nums, txn_queue, price_queue):
+def producer(block_nums, txn_queue, price_queue, outfile):
     web3 = connect()
 
-    for block_num in block_nums:
+    for i, block_num in enumerate(block_nums):
 
         block = web3.eth.getBlock(block_num)
         date = datetime.utcfromtimestamp(block['timestamp'])
 
         for txnhash in block['transactions']:
-            # only add SAMPLE_PERCENT of transactions to txn queue
-            if do_select():
-                txn_queue.put((block_num, txnhash))
+            # add all txns to txn queue
+            txn_queue.put((block_num, txnhash))
+
+        # write results periodically to file
+        # TODO: parameterize this
+        if i // 50 and i % 50 == 0:
+            part = i // 50
+            logging.info(f"Writing part {part} to file.")
+            write_to_file(price_queue, f"{outfile}_{part}.csv", part=part, ntxns=5000)
 
     '''
     producer thread waits for consumer threads.
@@ -140,6 +183,7 @@ def producer(block_nums, txn_queue, price_queue):
         # TODO: might still fail with lots of lag time on API calls
         time.sleep(10)
 
+    write_to_file(price_queue, f"{outfile}_{i // 50 + 1}.csv", part=part)
     PBAR.close()
     return
 
@@ -156,11 +200,8 @@ def consoomer(i, txn_queue, price_queue):
             # TODO: add a sleep() if rps becomes an issue
 
 if __name__ == '__main__':
-    from_datestr = '2021-01-19'
+
+    from_datestr = '2020-08-01'
     dt_from = datetime.strptime(from_datestr, "%Y-%m-%d")
-    to_datestr = dt_to_str(datetime.now())
-
-    outfile = f'gas_prices_{from_datestr}_{to_datestr}_{SAMPLE_PERCENT}%-sampling.csv'
-
-    scrape_prices(dt_from=dt_from, dt_to=dt_from + timedelta(minutes=20),  outfile=outfile)
-
+    #df_from = dt_to - timedelta(minutes=30)
+    scrape_prices(dt_from=dt_from, dt_to=datetime.now())

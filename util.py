@@ -4,7 +4,8 @@ import warnings
 from web3 import Web3
 
 from config import (
-    NODE_IP_ADDR
+    NODE_IP_ADDR,
+    INFURA_PROVIDER
 )
 
 if not NODE_IP_ADDR:
@@ -27,6 +28,7 @@ class LockedIterator(object):
 
 def connect():
     return Web3(Web3.HTTPProvider(NODE_IP_ADDR))
+    #return Web3(Web3.WebsocketProvider(INFURA_PROVIDER))
 
 def get_first_eth_block_at(ts):
     '''
