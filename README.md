@@ -2,4 +2,5 @@
 Scraping and analyzing historical gas prices on Ethereum
 
 ## TODO
-- currently bottlenecked at Infura rate limits (daily and per second)
+- cache API call returns
+- parallelize with multiple Ethereum endpoints
