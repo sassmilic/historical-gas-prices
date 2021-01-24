@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import random
 import seaborn as sns
+from tqdm.notebook import tqdm
 import matplotlib.pyplot as plt
 
 API3_PURPLE = '#7963B2'
@@ -47,6 +48,13 @@ def airnode_sim(df, wake_up_times):
         'mined?': [], # whether or not the txn was mined within the minute
     }
 
+    def _get_recommended(df, block_num):
+        # by default, recommonded gas price given by providers
+        # is the 60th percentile of gas prices in last 20 blocks
+        prev20 = set(range(block_num - 20, block_num))
+        df_slice = df[df['blockNum'].isin(prev20)]
+        return np.percentile(df_slice['gasPrice'], 60)
+
     # queue of block numbers
     block_queue = list(df['blockNum'].unique())
     block_queue.sort() # just in case
@@ -56,7 +64,7 @@ def airnode_sim(df, wake_up_times):
 
     ### 1. Airnode wakes up
     prev = block_queue.pop(0)
-    for i,ts in enumerate(wake_up_times):
+    for i,ts in tqdm(list(enumerate((wake_up_times)))):
 
         ### 2. Checks most recently mined block
         curr = block_queue.pop(0)
@@ -75,7 +83,9 @@ def airnode_sim(df, wake_up_times):
         assert ts1 <= ts < ts2
 
         if ts2 - ts > 60:
-            # TODO: check this logic
+            # next block is 60 seconds after `ts`
+            # our transaction woulnd't get mined regardless
+
             # update results
             results['wakeup_ts'].append(ts)
             results['gasPrice'].append(chosen_gas_price)
@@ -92,9 +102,15 @@ def airnode_sim(df, wake_up_times):
         ### 4. The gas price of that txn is selected by Airnode.
         gas_prices = df[df['blockNum'] == current_block]['gasPrice'].values
         chosen_gas_price = random.choice(gas_prices)
-        # NOTE: assume we have some way of removing extreme values
-        while chosen_gas_price > np.mean(gas_prices) + 2 * np.std(gas_prices):
-            chosen_gas_price = random.choice(gas_prices)
+
+        # remove extreme values via recommended gas price
+        rec_price = _get_recommended(df, current_block)
+
+        if chosen_gas_price < rec_price:
+            chosen_gas_price = rec_price
+
+        if chosen_gas_price > 3 * rec_price:
+            chosen_gas_price = 3 * rec_price
 
         ### EVALUATE:
         # Is this gas price *strictly greater* than the min gas price
