@@ -5,5 +5,3 @@ cache
 artifacts
 
 .env
-log.json
-txes.json

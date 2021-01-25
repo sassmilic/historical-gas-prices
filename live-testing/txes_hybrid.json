@@ -1,0 +1,34 @@
+[
+    {
+        "submitBlockNumber": 9536357,
+        "confirmBlockNumber": 9536359,
+        "sampleGasPrice": "4899582941",
+        "recommendedGasPrice": "4899582941",
+        "usedGasPrice": "4899582941",
+        "hash": "0x8c77f5fdfec66386955d2ef7f57b64d81b9952da8421cf4330d6f57397f558b8"
+    },
+    {
+        "submitBlockNumber": 9536363,
+        "confirmBlockNumber": 9536364,
+        "sampleGasPrice": "4899582941",
+        "recommendedGasPrice": "4899582941",
+        "usedGasPrice": "4899582941",
+        "hash": "0x81cbff0b338f2d227a7b2e09991c873aee282cb5e412cc5730ce6d56a2f895d8"
+    },
+    {
+        "submitBlockNumber": 9536368,
+        "confirmBlockNumber": 9536369,
+        "sampleGasPrice": "5879499529",
+        "recommendedGasPrice": "4899582941",
+        "usedGasPrice": "5879499529",
+        "hash": "0xdd83d687556908439d7a16c7689e143be393517517484159dd5613e96db2eec7"
+    },
+    {
+        "submitBlockNumber": 9536372,
+        "confirmBlockNumber": 9536373,
+        "sampleGasPrice": "4899582941",
+        "recommendedGasPrice": "4899582941",
+        "usedGasPrice": "4899582941",
+        "hash": "0x922fbd9996fe9a698bd80234b59cbf119afcb20b92ad95500ca2783606044eaa"
+    }
+]

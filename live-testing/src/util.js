@@ -18,9 +18,9 @@ module.exports = {
     const filePath = './log.json';
     return readLogJson(filePath)[name];
   },
-  addTx: function (entry) {
+  addTx: function (testCase, entry) {
     let txes = [];
-    const filePath = './txes.json';
+    const filePath = `./txes_${testCase}.json`;
     if (fs.existsSync(filePath)) {
       txes = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     }
