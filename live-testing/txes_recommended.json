@@ -1,0 +1,52 @@
+[
+    {
+        "submitBlockNumber": 9540029,
+        "confirmBlockNumber": 9540031,
+        "submitTimestamp": 1611654477,
+        "confirmTimestamp": 1611654516,
+        "sampleGasPrice": "7291986705",
+        "recommendedGasPrice": "4861324470",
+        "usedGasPrice": "4861324470",
+        "hash": "0xf5bce90521fb690921c16a4eac3932cad028319eca11af966e83257bed1b1ffa"
+    },
+    {
+        "submitBlockNumber": 9540033,
+        "confirmBlockNumber": 9540034,
+        "submitTimestamp": 1611654526,
+        "confirmTimestamp": 1611654569,
+        "sampleGasPrice": "2100000000000",
+        "recommendedGasPrice": "4861324470",
+        "usedGasPrice": "4861324470",
+        "hash": "0xbd5ccb7d277409a6c304611ac87f57afc492a99e1f7519d63a86b64f3439d5f6"
+    },
+    {
+        "submitBlockNumber": 9540034,
+        "confirmBlockNumber": 9540035,
+        "submitTimestamp": 1611654569,
+        "confirmTimestamp": 1611654595,
+        "sampleGasPrice": "10000000000",
+        "recommendedGasPrice": "4861324470",
+        "usedGasPrice": "4861324470",
+        "hash": "0x4d086cfc1278fd66af047d511d362e9b0a7da5fe8a364ed8d8bcad07a6d5afcc"
+    },
+    {
+        "submitBlockNumber": 9540038,
+        "confirmBlockNumber": 9540039,
+        "submitTimestamp": 1611654659,
+        "confirmTimestamp": 1611654668,
+        "sampleGasPrice": "10000000000",
+        "recommendedGasPrice": "4861324470",
+        "usedGasPrice": "4861324470",
+        "hash": "0xce2a272159ea8f3b30582bf5148e4ac873315f95f5e2ded23547e73de9825e4d"
+    },
+    {
+        "submitBlockNumber": 9540042,
+        "confirmBlockNumber": null,
+        "submitTimestamp": 1611654733,
+        "confirmTimestamp": 1611654745,
+        "sampleGasPrice": "4000000000",
+        "recommendedGasPrice": "4861324470",
+        "usedGasPrice": "4861324470",
+        "hash": "0xc52ae56b62d5dbcc09c7d95ee7ba65677e07d1a4c6dcbace7c4395d6b0b86a10"
+    }
+]
