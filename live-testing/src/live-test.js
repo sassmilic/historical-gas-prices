@@ -90,6 +90,8 @@ async function main() {
       util.addTx(testCase, {
         submitBlockNumber,
         confirmBlockNumber: tx.blockNumber,
+        submitTimestamp: submitBlock.timestamp,
+        confirmTimestamp: (await provider.getBlock(tx.blockNumber)).timestamp,
         sampleGasPrice: sampleGasPrice.toString(),
         recommendedGasPrice: recommendedGasPrice.toString(),
         usedGasPrice: usedGasPrice.toString(),
