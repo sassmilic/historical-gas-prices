@@ -7,7 +7,7 @@ const TIME_BETWEEN_TXES_IN_MINUTES = 1; // Set this large enough
 
 const TEST_CASES = {
   recommended: true,
-  rand1: true,
+  //rand1: true,
   hybrid: true,
   boosted10: true // recommended + 10%
 };
@@ -19,7 +19,7 @@ async function main() {
     process.env.MNEMONIC_1,
     process.env.MNEMONIC_2,
     process.env.MNEMONIC_3,
-    process.env.MNEMONIC_4
+    //process.env.MNEMONIC_4
   ];
 
   const wallets = [];
@@ -54,11 +54,24 @@ async function main() {
     const submitBlock = await provider.getBlock(submitBlockNumber);
     // Skip this block if empty
     if (submitBlock.transactions.length == 0) {
-      return;
+        console.log('Most recent block is empty.');
+        return;
     }
     txNo++;
-    const sampledTxHash = submitBlock.transactions[Math.floor(Math.random() * submitBlock.transactions.length)];
+
+    let sampledTxHash = submitBlock.transactions[Math.floor(Math.random() * submitBlock.transactions.length)];
     const sampledTx = await provider.getTransaction(sampledTxHash);
+
+    let timeout = 0;
+    while (sampledTx == null) {
+        console.log('Sample txn returned null. Retrying.');
+        timeout++;
+        if (timeout == 10) {
+            console.log('Timed out.');
+            return;
+        }
+    }
+
     const sampleGasPrice = sampledTx.gasPrice;
 
     // Get the recommended gas price
@@ -69,7 +82,7 @@ async function main() {
     // Shuffle `testCases` each time to eliminate any chance
     // that ordering affects results.
     util.shuffle(testCases);
-    console.log('Text case ordering: ', testCases);
+    console.log('Test case ordering: ', testCases);
 
     testCases.forEach(async (testCase, indTestCase) => {
       let usedGasPrice;
@@ -94,22 +107,57 @@ async function main() {
         usedGasPrice = recommendedGasPrice.mul(11).div(10);
       }
 
+      console.log(
+        "Method:\t", testCase,
+        ".\tUsed gas price: ", usedGasPrice.toString()
+      );
+
       // Make the transaction
+      let txnCreated = Date.now();
+
+      // Set nonce manually because we want to override previous pending txns.
+      // Most providers take into account pending txns when computing nonce.
+      let txn_count = await provider.getTransactionCount(wallets[indTestCase].address);
+
       const receipt = await mockContract
         .connect(wallets[indTestCase])
         .updateData(
           Math.round(Math.random() * 1000),
-          { gasPrice: usedGasPrice }
-          );
-      // Wait until it's confirmed
-      await receipt.wait();
-      // Find out when it was confirmed
+          {
+              gasPrice: usedGasPrice,
+              gasLimit: 22000,
+              nonce: txn_count
+          }
+        );
+
+      // Wait a minute to check if confirmed
+      await util.sleep(60 * 1000);
+
       const tx = await provider.getTransaction(receipt.hash);
+
+      if (tx.confirmations == 0) {
+        console.log('Failed to confirm transaction %s', receipt.hash);
+        util.addTx(testCase, {
+          submitBlockNumber,
+          createTimestamp: txnCreated,
+          confirmBlockNumber: null,
+          currentBlockTimestamp: submitBlock.timestamp,
+          confirmTimestamp: null,
+          sampleGasPrice: sampleGasPrice.toString(),
+          recommendedGasPrice: recommendedGasPrice.toString(),
+          usedGasPrice: usedGasPrice.toString(),
+          hash: null
+        });
+        return;
+      }
+
+      console.log('Transaction %s confirmed with %d confirmations', receipt.hash, tx.confirmations);
 
       util.addTx(testCase, {
         submitBlockNumber,
+        createTimestamp: txnCreated,
         confirmBlockNumber: tx.blockNumber,
-        submitTimestamp: submitBlock.timestamp,
+        currentBlockTimestamp: submitBlock.timestamp,
         confirmTimestamp: (await provider.getBlock(tx.blockNumber)).timestamp,
         sampleGasPrice: sampleGasPrice.toString(),
         recommendedGasPrice: recommendedGasPrice.toString(),

@@ -47,6 +47,9 @@ module.exports = {
     txes.push(entry);
     fs.writeFileSync(filePath, JSON.stringify(txes, null, 4));
   },
+  sleep: function (ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  },
   shuffle: function (array) {
     return shuffle(array);
   },
