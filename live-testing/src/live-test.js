@@ -13,25 +13,38 @@ const TEST_CASES = {
 };
 
 async function main() {
+  console.log('Provider URL: %s', process.env.PROVIDER_URL);
   const provider = new ethers.providers.JsonRpcProvider(process.env.PROVIDER_URL);
-  const wallets = [
-    ethers.Wallet.fromMnemonic(process.env.MNEMONIC_1).connect(provider),
-    ethers.Wallet.fromMnemonic(process.env.MNEMONIC_2).connect(provider),
-    ethers.Wallet.fromMnemonic(process.env.MNEMONIC_3).connect(provider),
-    ethers.Wallet.fromMnemonic(process.env.MNEMONIC_4).connect(provider)
+  const mnemos = [
+    process.env.MNEMONIC_1,
+    process.env.MNEMONIC_2,
+    process.env.MNEMONIC_3,
+    process.env.MNEMONIC_4
   ];
+
+  const wallets = [];
+  mnemos.forEach(function(x){
+    wallets.push(ethers.Wallet.fromMnemonic(x).connect(provider))
+  })
+
+  for (const w of wallets) {
+    let balance = await provider.getBalance(w.address);
+    console.log("Using wallet address %s. Current balance: %d", w.address, balance);
+  }
 
   const mockContract = new ethers.Contract(
     util.readFromLogJson('mockContractAddress'),
     MockContract.abi
   );
 
-  const testCases = [];
+  let testCases = [];
   for (const testCase in TEST_CASES) {
     if (TEST_CASES[testCase]) {
       testCases.push(testCase);
     }
   }
+
+  console.log('Entering loop ...');
 
   let txNo = 1;
   setInterval(async () => {
@@ -51,7 +64,13 @@ async function main() {
     // Get the recommended gas price
     const recommendedGasPrice = await provider.getGasPrice();
 
-    // Treat each test case separately, but in parallel
+    // Treat each test case separately, but in parallel.
+
+    // Shuffle `testCases` each time to eliminate any chance
+    // that ordering affects results.
+    util.shuffle(testCases);
+    console.log('Text case ordering: ', testCases);
+
     testCases.forEach(async (testCase, indTestCase) => {
       let usedGasPrice;
       if (testCase == 'recommended') {
