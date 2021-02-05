@@ -60,11 +60,14 @@ async function main() {
     txNo++;
 
     let sampledTxHash = submitBlock.transactions[Math.floor(Math.random() * submitBlock.transactions.length)];
-    const sampledTx = await provider.getTransaction(sampledTxHash);
+    let sampledTx = await provider.getTransaction(sampledTxHash);
 
     let timeout = 0;
     while (sampledTx == null) {
         console.log('Sample txn returned null. Retrying.');
+        let sampledTxHash = submitBlock.transactions[Math.floor(Math.random() * submitBlock.transactions.length)];
+        let sampledTx = await provider.getTransaction(sampledTxHash);
+        util.sleep(500);
         timeout++;
         if (timeout == 10) {
             console.log('Timed out.');
@@ -135,7 +138,7 @@ async function main() {
 
       const tx = await provider.getTransaction(receipt.hash);
 
-      if (tx.confirmations == 0) {
+      if (tx == null || tx.confirmations == 0) {
         console.log('Failed to confirm transaction %s', receipt.hash);
         util.addTx(testCase, {
           submitBlockNumber,
