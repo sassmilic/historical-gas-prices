@@ -20,9 +20,10 @@ import pandas as pd
 import web3
 pd.options.mode.chained_assignment = None
 
-#
-# connect to node
-#
+#####################
+## connect to node ##
+#####################
+
 class EmptyProvider(Exception):
     # pylint: disable=C0115
     pass
@@ -32,9 +33,10 @@ if "WEB3_PROVIDER_URI" not in os.environ:
 
 assert w3.isConnected(), "problem connecting to node"
 
-#
-# initialize cache
-#
+######################
+## initialize cache ##
+######################
+
 def _init_cache():
     def _should_cache(method, params, response):
         if 'error' in response:
@@ -64,12 +66,17 @@ def _init_cache():
     w3.middleware_onion.add(simple_cache)
 
 _init_cache()
+
+####################
+## important note ##
+####################
 """
 NOTE: shelve.py does NOT support concurrent processes
 - pandas `apply` is computed in parallel
-- this necessitates a lock
+- this necessitates a lock when any API calls are made in an `apply` call
 - kinda ugly but must be done
 """
+
 CACHE_LOCK = threading.Lock()
 
 def load_live_test_data():
