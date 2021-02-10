@@ -290,7 +290,7 @@ def _get_blocks_in_range(ts1, ts2, block_hint):
     with CACHE_LOCK:
         block = w3.eth.getBlock(block_hint)
 
-    while block.timestamp <= ts2:
+    while block.timestamp < ts2:
         if block.timestamp > ts1:
             bxs.append(block.number)
 
@@ -299,3 +299,85 @@ def _get_blocks_in_range(ts1, ts2, block_hint):
 
     return bxs
 
+def get_historical_transaction_data():
+    """
+    Get historical data.
+
+    Columns: ['blockNum', 'txnHash', 'gasPrice']
+    """
+    file_pattern = '../../output_*'
+    dfs = []
+    for fname in glob.glob(file_pattern):
+        with open(fname) as f:
+            dfs.append(pd.read_csv(f, delimiter='\t', names=['blockNum', 'txnHash', 'gasPrice']))
+
+    df = pd.concat(dfs)
+    df.drop_duplicates(inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    #df.drop('txnHash', inplace=True, axis=1)
+    df.sort_values('blockNum', inplace=True)
+
+    return df
+
+def get_percentile_df(df_mined, df_hist, pbar=False):
+    """
+    TODO
+    """
+    def _get_percentile(row, col, pbar=None):
+        if pbar:
+            pbar.update(1)
+        bxs = row[col]
+        if not isinstance(bxs, list):
+            bxs = [bxs]
+        ps = []
+        for bx in bxs:
+            gas_prices = df_hist[df_hist.blockNum == bx]['gasPrice']
+            gas_prices = gas_prices.tolist()
+            if len(gas_prices) == 0:
+                gas_prices = _get_gas_prices(bx)
+                if len(gas_prices) == 0:
+                    ps.append(float('nan'))
+                    continue
+            #gas_prices = list(map(int, gas_prices))
+            gas_prices.sort()
+            #print(gas_prices)
+            p = bisect.bisect(gas_prices, int(row['usedGasPrice'])) / len(gas_prices) * 100
+            # round for easier analysis
+            p = round(p, 2)
+            ps.append(p)
+        if not isinstance(row[col], list):
+            ps = ps[0]
+        row[col + '_percentiles'] = ps
+        return pd.Series(row)
+
+    if pbar:
+        pbar = tqdm(total=df_mined.shape[0])
+
+    df_percentile = df_mined.apply(_get_percentile, axis=1, args=('unmined_blocks', pbar))
+
+    pbar = tqdm(total=df_percentiles.shape[0])
+    df_percentiles = df_percentiles.apply(_get_percentile, axis=1, args=('mined_block', pbar))
+
+    return df_percentiles
+
+def _get_gas_prices(bx):
+    """
+    Get all gas prices for txns in `bx`.
+    """
+    prices = []
+    try:
+
+        with CACHE_LOCK:
+            block = w3.eth.getBlock(bx)
+
+    except TypeError:
+        return []
+
+    for txn_hash in block.transactions:
+
+        with CACHE_LOCK:
+            txn = w3.eth.getTransaction(txn_hash)
+
+        prices.append(txn.gasPrice)
+
+    return prices
