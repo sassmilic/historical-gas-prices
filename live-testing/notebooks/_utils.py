@@ -57,7 +57,7 @@ def _init_cache():
     })
 
     # put in persistent dict-like database via shelve.py
-    db = shelve.open('api_cache')
+    db = shelve.open('api_cache', 'c')
     # create callable
     cache_class = lambda: db
     simple_cache = web3.middleware.construct_simple_cache_middleware(
@@ -255,6 +255,7 @@ def get_mined_df(df, pbar=False):
     return a DataFrame containing blocks where given txns are mined/unmined.
     Columns of resulting DataFrame:
     - hash
+    - method
     - usedGasPrice
     - confirmations
     - mined_block
@@ -281,9 +282,9 @@ def get_mined_df(df, pbar=False):
 
         return pd.Series(
             [
-                row['hash'], row['usedGasPrice'],  row['confirmations'],
+                row['hash'], row['method'], row['usedGasPrice'],  row['confirmations'],
                 row['confirmBlockNumber'], bxs],
-            index=['hash', 'usedGasPrice', 'confirmations', 'mined_block', 'unmined_blocks']
+            index=['hash', 'method', 'usedGasPrice', 'confirmations', 'mined_block', 'unmined_blocks']
         )
 
     if pbar:
@@ -328,7 +329,12 @@ def get_historical_transaction_data():
 
 def get_percentile_df(df_mined, df_hist, pbar=False):
     """
-    TODO
+    Returns DataFrame with columns:
+    - hash
+    - method
+    - usedGasPrice
+    - percentile
+    - mined?
     """
     def _get_percentile(row, col, pbar=None):
         if pbar:
@@ -362,10 +368,27 @@ def get_percentile_df(df_mined, df_hist, pbar=False):
 
     df_percentile = df_mined.apply(_get_percentile, axis=1, args=('unmined_blocks', pbar))
 
-    pbar = tqdm(total=df_percentiles.shape[0])
-    df_percentiles = df_percentiles.apply(_get_percentile, axis=1, args=('mined_block', pbar))
+    pbar = tqdm(total=df_percentile.shape[0])
 
-    return df_percentiles
+    df_percentile = df_percentile.apply(_get_percentile, axis=1, args=('mined_block', pbar))
+
+    # some postprocessing
+    df_percentile = df_percentile.explode('unmined_blocks_percentiles')
+
+    df_unmined = df_percentile[~df_percentile.unmined_blocks_percentiles.isna()]
+    df_unmined = df_unmined[['hash', 'method', 'usedGasPrice', 'unmined_blocks_percentiles']]
+    df_unmined['mined?'] = False
+    df_unmined.rename(columns={'unmined_blocks_percentiles': 'percentile'}, inplace=True)
+
+    df_mined = df_percentile[df_percentile.unmined_blocks_percentiles.isna()]
+    df_mined = df_mined[['hash', 'method', 'usedGasPrice', 'mined_block_percentiles']]
+    df_mined['mined?'] = True
+    df_mined.rename(columns={'mined_block_percentiles': 'percentile'}, inplace=True)
+
+    df_percentile = pd.concat([df_mined, df_unmined])
+    df_percentile['percentile'] = df_percentile['percentile'].astype(int)
+
+    return df_percentile
 
 def _get_gas_prices(bx):
     """
