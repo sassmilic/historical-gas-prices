@@ -1,9 +1,11 @@
+import datetime
 import glob
 import math
-import numpy as np
-import pandas as pd
 import random
 import re
+
+import numpy as np
+import pandas as pd
 import seaborn as sns
 from tqdm.notebook import tqdm
 import matplotlib.pyplot as plt
@@ -219,3 +221,38 @@ def plot1(df, lower_cap=None, upper_cap=None):
     #plt.xticks(rotation=45)
     g.set_title(f"Distribution of gas price in consecutive blocks (during a peak period around {df['hour'].iloc[0]}:00)");
 
+def plot_gas_prices(df):
+    start_ts = df.iloc[0]['timeStamp']
+    end_ts = df.iloc[-1]['timeStamp']
+
+    def percentile(n):
+        def percentile_(x):
+            return np.percentile(x, n)
+        percentile_.__name__ = 'percentile_%s' % n
+        return percentile_
+
+    df_agg = df.groupby('blockNum')['gasPrice'].aggregate(
+        ['median', 'mean', 'std', percentile(10), percentile(25), percentile(75), percentile(90)]
+    )
+    df_agg = df_agg.reset_index()
+
+    # overlay individual median points with [25, 75] percentile range
+    lower_bound = np.array(df_agg['percentile_10'])
+    upper_bound = np.array(df_agg['percentile_90'])
+
+    _, ax = plt.subplots(1, 1, figsize=(20,10))
+
+    g = sns.scatterplot(x="blockNum", y="median", data=df_agg, s=3, color="black")
+    plt.fill_between(df_agg['blockNum'], lower_bound, upper_bound, alpha=.2, color=API3_PURPLE);
+    plt.ylim(0, 350);
+
+    to_date_str = lambda ts: datetime.datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+
+    g.set(
+        xlabel='',
+        ylabel='gas price (Gwei)',
+        xticks=[df_agg['blockNum'].iloc[0], df_agg['blockNum'].iloc[-1]],
+        xticklabels=[to_date_str(start_ts), to_date_str(end_ts)]
+    )
+
+    g.set_title(f'Median gas prices around the time of Black Thursday overlaid with [25th, 75th] percentile intervals');
