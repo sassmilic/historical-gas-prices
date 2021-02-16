@@ -1,7 +1,9 @@
 import glob
+import math
 import numpy as np
 import pandas as pd
 import random
+import re
 import seaborn as sns
 from tqdm.notebook import tqdm
 import matplotlib.pyplot as plt
@@ -40,15 +42,20 @@ def load_data(file_patterns):
 
     return df
 
-def airnode_sim(df, wake_up_times, gas_price_selection='recommended'):
+def airnode_sim(df, wake_up_times, gas_price_selection='boosted'):
     # store results
     result = {
         'wakeup_ts': [], # timestamp of Airnode 'wake up time'
+        'method': [],
         'gasPrice': [], # gas prices of response txns
-        'mined?': [], # whether or not the txn was mined within the minute
-        'confirmation_time_block_num': [], # the number of the block in which the txn was mined
-        'confirmation_time_seconds': [] # the number seconds it took the txn to get mined
+        #'mined?': [], # whether or not the txn was mined within the minute
+        'confirmation_block_num': [], # the number of the block in which the txn was mined
+        'confirmation_block_seconds': [], # the number seconds it took the txn to get mined
+        'next_block_percentiles': []
     }
+
+    if not isinstance(gas_price_selection, list):
+        gas_price_selection = [gas_price_selection]
 
     # TODO: add some lag to airnode response e.g. 1-5 seconds
 
@@ -65,10 +72,14 @@ def airnode_sim(df, wake_up_times, gas_price_selection='recommended'):
 
     # dataframe containing only min gas price per block
     df_min = df.groupby('blockNum').min()[['gasPrice', 'timeStamp']]
+    df_max = df.groupby('blockNum').max()[['gasPrice', 'timeStamp']]
 
     ### 1. Airnode wakes up
     prev = block_queue.pop(0)
     for i,ts in tqdm(list(enumerate((wake_up_times)))):
+
+        # add lag: 3 seconds, pretty conservative
+        ts += 3
 
         ### 2. Checks most recently mined block
         curr = block_queue.pop(0)
@@ -87,39 +98,53 @@ def airnode_sim(df, wake_up_times, gas_price_selection='recommended'):
         assert ts1 <= ts < ts2
 
         if ts2 - ts > 60:
-            # next block is 60 seconds after `ts`
-            # our transaction woulnd't get mined regardless
-            result['wakeup_ts'].append(ts)
-            result['gasPrice'].append(chosen_gas_price)
-            result['mined?'].append(False)
-            result['confirmation_time_block_num'].append(np.nan)
-            result['confirmation_time_seconds'].append(60)
-            continue
+            for method, chosen_gas_price in zip(gas_price_selection, chosen_gas_prices):
+                # next block is 60 seconds after `ts`
+                # our transaction woulnd't get mined regardless
+                result['wakeup_ts'].append(ts)
+                result['method'].append(method)
+                result['gasPrice'].append(None)
+                #result['mined?'].append(False)
+                result['confirmation_block_num'].append(None)
+                result['confirmation_block_seconds'].append(None)
+                result['next_block_percentiles'].append(ps)
+                continue
 
-        ### 3. Select a gas price for the transaction
-        if gas_price_selection == 'recommended':
-            chosen_gas_price = _get_recommended(df, current_block)
+        chosen_gas_prices = []
 
-        elif gas_price_selection == 'rand1':
-            ### 3a. Randomly selects a txn from block
-            ### 3b. The gas price of that txn is selected by Airnode.
-            gas_prices = df[df['blockNum'] == current_block]['gasPrice'].values
-            chosen_gas_price = random.choice(gas_prices)
-            ### 3c. remove extreme values via recommended gas price
-            rec_price = _get_recommended(df, current_block)
+        for gps in gas_price_selection:
+            ### 3. Select a gas price for the transaction
+            if gps == 'recommended':
+                chosen_gas_prices.append(_get_recommended(df, current_block))
 
-            if chosen_gas_price < rec_price:
-                chosen_gas_price = rec_price
+            elif gps == 'rand1':
+                ### 3a. Randomly selects a txn from block
+                ### 3b. The gas price of that txn is selected by Airnode.
+                gas_prices = df[df['blockNum'] == current_block]['gasPrice'].values
+                chosen_gas_price = random.choice(gas_prices)
+                ### 3c. remove extreme values via recommended gas price
+                rec_price = _get_recommended(df, current_block)
 
-            elif chosen_gas_price > 2 * rec_price:
-                chosen_gas_price = 2 * rec_price
+                if chosen_gas_price < rec_price:
+                    chosen_gas_prices.append(rec_price)
 
-        else:
-            raise Exception('unknown gas price selection technique')
+                elif chosen_gas_price > 2 * rec_price:
+                    chosen_gas_prices.append(2 * rec_price)
 
-        ### 3. Randomly selects a txn from block
-        ### 4. The gas price of that txn is selected by Airnode.
-        gas_prices = df[df['blockNum'] == current_block]['gasPrice'].values
+            elif gps == 'rand3':
+                # performs pretty bad
+                gas_prices = list(df[df['blockNum'] == current_block]['gasPrice'].values)
+                if len(gas_prices) < 3:
+                    chosen_gas_prices.append(max(gas_prices))
+                else:
+                    chosen_gas_prices.append(sorted(random.sample(list(gas_prices), 3))[1])
+
+            elif gps.startswith('boosted'):
+                boost_x = float(re.match('boosted_(.*)', gps).group(1))
+                chosen_gas_prices.append(boost_x * _get_recommended(df, current_block))
+
+            else:
+                raise Exception('unknown gas price selection technique')
 
         ### EVALUATE:
         # Is this gas price *strictly greater* than the min gas price
@@ -133,25 +158,37 @@ def airnode_sim(df, wake_up_times, gas_price_selection='recommended'):
             nxt_blocks.append(block_queue[j])
             j += 1
 
+        # don't include blocks that are currently being mined
+        nxt_blocks = [b for b in nxt_blocks if df_min.loc[b].timeStamp > 10 + ts]
+
         for i,b in enumerate(nxt_blocks):
-            if chosen_gas_price > df_min.loc[b]['gasPrice']:
+
+            nxt_gas_prices = df[df['blockNum'] == b].gasPrice.tolist()
+            nxt_gas_prices.sort()
+
+            ps = [_percentile(nxt_gas_prices, p) for p in [0, 25, 50, 75, 100]]
+
+            for method, chosen_gas_price in zip(gas_price_selection, chosen_gas_prices):
+
+                assert ps[0] == df_min.loc[b]['gasPrice']
+                assert ps[-1] == df_max.loc[b]['gasPrice']
+
                 # update results
                 result['wakeup_ts'].append(ts)
+                result['method'].append(method)
                 result['gasPrice'].append(chosen_gas_price)
-                result['mined?'].append(True)
-                result['confirmation_time_block_num'].append(i + 1)
-                result['confirmation_time_seconds'].append(df_min.loc[b]['timeStamp'] - ts)
-                break
-        else:
-            # `break` didn't execute
-            result['wakeup_ts'].append(ts)
-            result['gasPrice'].append(chosen_gas_price)
-            result['mined?'].append(False)
-            result['confirmation_time_block_num'].append(len(nxt_blocks))
-            result['confirmation_time_seconds'].append(60)
+                #result['mined?'].append(True)
+                result['confirmation_block_num'].append(i + 1)
+                result['confirmation_block_seconds'].append(df_min.loc[b]['timeStamp'] - ts)
+                result['next_block_percentiles'].append(ps)
 
     df_results = pd.DataFrame(result)
     return df_results
+
+def _percentile(l, p):
+    i = math.floor(len(l) * p / 100)
+    i = min(len(l) - 1, i)
+    return l[i]
 
 def plot1(df, lower_cap=None, upper_cap=None):
     _, ax = plt.subplots(1, 1, figsize=(15,10))
